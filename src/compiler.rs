@@ -1,10 +1,22 @@
-use crate::ui::{BreakdownType, GraphNode, NodeTrait, NodeViewer, PrimitiveType};
-use crate::{Bytecode, Value};
+use crate::nodes::GraphNode;
+use crate::nodes::breakdown_node::BreakdownType;
+use crate::nodes::primitive_node::PrimitiveType;
+use crate::nodes::query_node::QueryDataType;
+use crate::ui::{NodeTrait, NodeViewer};
+use crate::{Bytecode, QueryWrapper, Value};
+use bevy::ecs::component::ComponentId;
+use bevy::ecs::world::FilteredEntityMut;
+use bevy::prelude::{QueryBuilder, World};
 use egui_snarl::ui::SnarlViewer;
-use egui_snarl::{InPinId, NodeId, OutPinId, Snarl};
+use egui_snarl::{InPinId, NodeId, OutPin, OutPinId, Snarl};
+use std::any::{Any, TypeId};
 use std::collections::HashMap;
 
-pub(crate) fn compile(node_viewer: &mut NodeViewer, snarl: &Snarl<GraphNode>) -> Vec<Bytecode> {
+pub(crate) fn compile(
+    world: &mut World,
+    node_viewer: &mut NodeViewer,
+    snarl: &Snarl<GraphNode>,
+) -> Vec<Bytecode> {
     let mut start = None;
     for (i, node) in snarl.nodes().enumerate() {
         match node {
@@ -26,42 +38,121 @@ pub(crate) fn compile(node_viewer: &mut NodeViewer, snarl: &Snarl<GraphNode>) ->
     let mut scope_map: HashMap<OutPinId, usize> = HashMap::new();
     let mut bytecode: Vec<Bytecode> = vec![];
     let mut stack_ptr = 0;
+    resolve_forward_pass_flow_until_finished(
+        &mut bytecode,
+        next_pin,
+        &mut scope_map,
+        &mut stack_ptr,
+        snarl,
+        node_viewer,
+        world,
+    );
 
+    bytecode
+}
+
+fn resolve_forward_pass_flow_until_finished(
+    bytecode: &mut Vec<Bytecode>,
+    mut next_pin: OutPin,
+    scope_map: &mut HashMap<OutPinId, usize>,
+    stack_ptr: &mut usize,
+    snarl: &Snarl<GraphNode>,
+    node_viewer: &mut NodeViewer,
+    world: &mut World,
+) {
     loop {
         let Some(this) = next_pin.remotes.first() else {
             break;
         };
         let this_node = this.node;
-        let function_node = snarl.get_node(this_node).unwrap().function().unwrap();
-        for input in 1..function_node.inputs(node_viewer) {
-            let data_dependency = snarl
-                .in_pin(InPinId {
-                    node: this_node,
-                    input,
-                })
-                .remotes
-                .first()
-                .unwrap()
-                .clone();
-            resolve_data_dependency(
-                &mut bytecode,
-                &mut scope_map,
-                &mut stack_ptr,
-                &snarl,
-                data_dependency,
-            );
-            bytecode.push(Bytecode::Dup(
-                scope_map.get(&data_dependency).unwrap().clone(),
-            ));
+        match snarl.get_node(this_node).unwrap() {
+            GraphNode::Function(function_node) => {
+                for input in 1..function_node.inputs(node_viewer) {
+                    let data_dependency = snarl
+                        .in_pin(InPinId {
+                            node: this_node,
+                            input,
+                        })
+                        .remotes
+                        .first()
+                        .unwrap()
+                        .clone();
+                    resolve_data_dependency(
+                        bytecode,
+                        scope_map,
+                        stack_ptr,
+                        &snarl,
+                        data_dependency,
+                    );
+                    bytecode.push(Bytecode::Dup(
+                        scope_map.get(&data_dependency).unwrap().clone(),
+                    ));
+                }
+                println!("adding function");
+                bytecode.push(Bytecode::Call(function_node.0.as_ref().unwrap().clone()));
+                *stack_ptr += 1;
+            }
+            GraphNode::For(for_node) => {
+                let data_dependency = snarl
+                    .in_pin(InPinId {
+                        node: this_node,
+                        input: 1,
+                    })
+                    .remotes
+                    .first()
+                    .unwrap()
+                    .clone();
+                resolve_data_dependency(bytecode, scope_map, stack_ptr, &snarl, data_dependency);
+                bytecode.push(Bytecode::NextMut);
+                let position = bytecode.len();
+                bytecode.push(Bytecode::Jump(0));
+                let prev_stack = *stack_ptr;
+                resolve_forward_pass_flow_until_finished(
+                    bytecode,
+                    snarl.out_pin(OutPinId {
+                        node: this_node,
+                        output: 0,
+                    }),
+                    scope_map,
+                    stack_ptr,
+                    snarl,
+                    node_viewer,
+                    world,
+                );
+                for _ in prev_stack..(*stack_ptr) {
+                    bytecode.push(Bytecode::Pop);
+                }
+                bytecode.push(Bytecode::Jump(position - 1));
+                let len_temp = bytecode.len();
+                match bytecode.get_mut(position).unwrap() {
+                    Bytecode::Jump(jump) => {
+                        *jump = len_temp;
+                    }
+                    _ => unreachable!(),
+                }
+                next_pin = snarl.out_pin(OutPinId {
+                    node: this.node,
+                    output: 2,
+                });
+                *stack_ptr = prev_stack;
+                continue;
+            }
+            GraphNode::Query(query_node) => {
+                let mut map: HashMap<TypeId, ComponentId> = HashMap::default();
+                for c in world.components().iter_registered() {
+                    map.insert(c.type_id().unwrap(), c.id());
+                }
+                bytecode.push(Bytecode::Query(QueryWrapper::new(
+                    query_node.querying.clone(),
+                )));
+            }
+            _ => panic!("flow must be of flow types"),
         }
-        bytecode.push(Bytecode::Call(function_node.0.as_ref().unwrap().clone()));
-        stack_ptr += 1;
         next_pin = snarl.out_pin(OutPinId {
             node: this.node,
             output: 0,
         });
     }
-    bytecode
 }
 
 fn resolve_data_dependency(
@@ -90,11 +181,22 @@ fn resolve_data_dependency(
         }
         match snarl.get_node(out_pin_id.node).unwrap() {
             GraphNode::Breakdown(breakdown) => {
-                let out_pin_id_of_breakdown_input = snarl.in_pin(InPinId {
-                    node: out_pin_id.node,
-                    input: 0,
-                }).remotes.first().unwrap().clone();
-                resolve_data_dependency(bytecode, scope_map, stack_ptr, snarl, out_pin_id_of_breakdown_input);
+                let out_pin_id_of_breakdown_input = snarl
+                    .in_pin(InPinId {
+                        node: out_pin_id.node,
+                        input: 0,
+                    })
+                    .remotes
+                    .first()
+                    .unwrap()
+                    .clone();
+                resolve_data_dependency(
+                    bytecode,
+                    scope_map,
+                    stack_ptr,
+                    snarl,
+                    out_pin_id_of_breakdown_input,
+                );
                 let position = *scope_map.get(&out_pin_id_of_breakdown_input).unwrap();
                 match breakdown.breakdown_type {
                     BreakdownType::Owned => {
@@ -122,7 +224,9 @@ fn resolve_data_dependency(
                     let remote = in_pin.remotes.first().unwrap().clone();
                     resolve_data_dependency(bytecode, scope_map, stack_ptr, snarl, remote);
                 }
-                bytecode.push(Bytecode::Push(Value::Box(Box::new(buildup.reflect_clone().unwrap()).into_partial_reflect())));
+                bytecode.push(Bytecode::Push(Value::Box(
+                    Box::new(buildup.reflect_clone().unwrap()).into_partial_reflect(),
+                )));
                 for (i, field) in buildup.iter_fields().enumerate() {
                     let in_pin = snarl.in_pin(InPinId {
                         node: out_pin_id.node,
@@ -135,7 +239,20 @@ fn resolve_data_dependency(
                 scope_map.insert(out_pin_id, *stack_ptr);
                 *stack_ptr += 1;
             }
-            _ => unreachable!(),
+            GraphNode::Query(_query) => {
+                scope_map.insert(out_pin_id, *stack_ptr);
+                *stack_ptr += 1;
+            }
+            GraphNode::For(_for) => {
+                scope_map.insert(out_pin_id, *stack_ptr);
+                *stack_ptr += 1;
+            }
+            GraphNode::TupleBreakdown(tuple_breakdown) => {
+                bytecode.push(Bytecode::ListBreakdown(tuple_breakdown.length));
+                scope_map.insert(out_pin_id, *stack_ptr);
+                *stack_ptr += tuple_breakdown.length;
+            }
+            unreachable => unreachable!("{:?}", unreachable.get_type()),
         }
     }
 }
