@@ -1,7 +1,8 @@
-use crate::nodes::GraphNode;
+use crate::nodes::{GraphCompileExt, GraphNode};
 /*use crate::nodes::breakdown_node::BreakdownType;
 use crate::nodes::primitive_node::PrimitiveType;
 use crate::nodes::query_node::QueryDataType;*/
+use crate::nodes::start_node::StartNode;
 use crate::ui::NodeViewer;
 use crate::{Bytecode, QueryWrapper, Value};
 use bevy::ecs::component::ComponentId;
@@ -17,6 +18,31 @@ pub(crate) fn compile(
     node_viewer: &mut NodeViewer,
     snarl: &Snarl<GraphNode>,
 ) -> Vec<Bytecode> {
+    let mut scope_map: HashMap<OutPinId, usize> = HashMap::new();
+    let mut bytecode: Vec<Bytecode> = vec![];
+    let mut stack_ptr = 0;
+    for (i, node) in snarl.nodes().enumerate() {
+        if node.get::<StartNode>().is_some() {
+            let out_pin = snarl.out_pin(OutPinId {
+                node: NodeId(i),
+                output: 0,
+            });
+            let Some(in_pin) = out_pin.remotes.first() else {
+                continue;
+            };
+
+            snarl.resolve_forward_pass_flow_until_finished(
+                &mut bytecode,
+                &mut scope_map,
+                &mut stack_ptr,
+                node_viewer,
+                world,
+                *in_pin,
+            );
+            return bytecode;
+        }
+    }
+    panic!("no start node!");
     /*let mut start = None;
     for (i, node) in snarl.nodes().enumerate() {
         match node {
@@ -49,7 +75,6 @@ pub(crate) fn compile(
     );
 
     bytecode*/
-    todo!()
 }
 /*
 fn resolve_forward_pass_flow_until_finished(

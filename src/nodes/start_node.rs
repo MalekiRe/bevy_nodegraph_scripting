@@ -1,9 +1,9 @@
-use std::any::Any;
-use egui::Ui;
-use egui_snarl::{InPin, OutPin, Snarl};
-use egui_snarl::ui::PinInfo;
 use crate::nodes::{GraphNode, GraphNodeMarketTrait, GraphNodeTrait};
-use crate::ui::{NodeViewer, FLOW_COLOR};
+use crate::ui::{FLOW_COLOR, NodeViewer};
+use egui::Ui;
+use egui_snarl::ui::PinInfo;
+use egui_snarl::{InPin, OutPin, Snarl};
+use std::any::Any;
 
 #[derive(Default)]
 pub struct StartNode;
@@ -23,23 +23,35 @@ impl GraphNodeTrait for StartNode {
 }
 struct Marker;
 impl GraphNodeMarketTrait for Marker {
-    fn show_input(&self, node_viewer: &mut NodeViewer, pin: &InPin, ui: &mut Ui, snarl: &mut Snarl<GraphNode>) -> PinInfo {
+    fn show_input(
+        &self,
+        _node_viewer: &mut NodeViewer,
+        _pin: &InPin,
+        _ui: &mut Ui,
+        _snarl: &mut Snarl<GraphNode>,
+    ) -> PinInfo {
         unreachable!()
     }
 
-    fn show_output(&self, node_viewer: &mut NodeViewer, pin: &OutPin, ui: &mut Ui, snarl: &mut Snarl<GraphNode>) -> PinInfo {
+    fn show_output(
+        &self,
+        _node_viewer: &mut NodeViewer,
+        _pin: &OutPin,
+        _ui: &mut Ui,
+        _snarl: &mut Snarl<GraphNode>,
+    ) -> PinInfo {
         PinInfo::triangle().with_fill(FLOW_COLOR)
     }
 
-    fn title(&self, graph_node: &GraphNode, node_viewer: &mut NodeViewer) -> String {
+    fn title(&self, _graph_node: &GraphNode, _node_viewer: &mut NodeViewer) -> String {
         "Start".to_owned()
     }
 
-    fn inputs(&self, graph_node: &GraphNode, node_viewer: &mut NodeViewer) -> usize {
+    fn inputs(&self, _graph_node: &GraphNode, _node_viewer: &mut NodeViewer) -> usize {
         0
     }
 
-    fn outputs(&self, graph_node: &GraphNode, node_viewer: &mut NodeViewer) -> usize {
+    fn outputs(&self, _graph_node: &GraphNode, _node_viewer: &mut NodeViewer) -> usize {
         1
     }
 }

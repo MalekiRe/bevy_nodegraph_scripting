@@ -12,6 +12,7 @@ use crate::nodes::breakdown_node::BreakdownNode;
 use crate::nodes::function_node::FunctionNode;
 use crate::nodes::ownership_node::OwnershipNode;
 use crate::nodes::primitive_node::PrimitiveNode;
+use crate::nodes::start_node::StartNode;
 use crate::ui::NodeViewer;
 use bevy::prelude::{Deref, DerefMut, PartialReflect, World};
 use bevy::reflect::func::args::Ownership;
@@ -20,7 +21,6 @@ use egui_snarl::ui::{PinInfo, SnarlViewer};
 use egui_snarl::{InPin, InPinId, NodeId, OutPin, OutPinId, Snarl};
 use std::any::Any;
 use std::collections::HashMap;
-use crate::nodes::start_node::StartNode;
 /*pub mod breakdown_node;
 pub mod buildup_node;
 pub mod for_node;
@@ -31,10 +31,10 @@ pub mod query_node;
 pub mod tuple_breakdown_node;*/
 
 pub mod apply_node;
+pub mod breakdown_node;
 pub mod function_node;
 pub mod ownership_node;
 pub mod primitive_node;
-pub mod breakdown_node;
 pub mod start_node;
 
 #[derive(Deref, DerefMut)]
@@ -63,10 +63,10 @@ pub trait GraphNodeTrait: Any {
 }
 
 impl dyn GraphNodeTrait {
-    fn get<T: 'static>(&self) -> Option<&T> {
+    pub fn get<T: 'static>(&self) -> Option<&T> {
         self.as_any().downcast_ref::<T>()
     }
-    fn get_mut<T: 'static>(&mut self) -> Option<&mut T> {
+    pub fn get_mut<T: 'static>(&mut self) -> Option<&mut T> {
         self.as_any_mut().downcast_mut::<T>()
     }
 }
@@ -149,24 +149,24 @@ pub trait GraphNodeMarketTrait {
 
     fn resolve_data_dependency(
         &self,
+        snarl: &Snarl<GraphNode>,
         bytecode: &mut Vec<Bytecode>,
         scope_map: &mut HashMap<OutPinId, usize>,
         stack_ptr: &mut usize,
-        snarl: &Snarl<GraphNode>,
-        out_pin_id: OutPinId,
+        pin: OutPin,
     ) {
         unimplemented!()
     }
     fn resolve_forward_pass_flow_until_finished(
         &self,
+        snarl: &Snarl<GraphNode>,
         bytecode: &mut Vec<Bytecode>,
-        mut next_pin: OutPin,
         scope_map: &mut HashMap<OutPinId, usize>,
         stack_ptr: &mut usize,
-        snarl: &Snarl<GraphNode>,
         node_viewer: &mut NodeViewer,
         world: &mut World,
-    ) {
+        pin: InPin,
+    ) -> Option<InPinId> {
         unimplemented!()
     }
 
@@ -185,5 +185,61 @@ pub trait GraphNodeMarketTrait {
         snarl: &mut Snarl<GraphNode>,
     ) -> Option<(Box<dyn PartialReflect>, Ownership)> {
         None
+    }
+}
+
+pub trait GraphCompileExt {
+    fn resolve_data_dependency(
+        &self,
+        bytecode: &mut Vec<Bytecode>,
+        scope_map: &mut HashMap<OutPinId, usize>,
+        stack_ptr: &mut usize,
+        pin: OutPinId,
+    ) -> usize;
+    fn resolve_forward_pass_flow_until_finished(
+        &self,
+        bytecode: &mut Vec<Bytecode>,
+        scope_map: &mut HashMap<OutPinId, usize>,
+        stack_ptr: &mut usize,
+        node_viewer: &mut NodeViewer,
+        world: &mut World,
+        pin: InPinId,
+    );
+}
+impl GraphCompileExt for Snarl<GraphNode> {
+    fn resolve_data_dependency(
+        &self,
+        bytecode: &mut Vec<Bytecode>,
+        scope_map: &mut HashMap<OutPinId, usize>,
+        stack_ptr: &mut usize,
+        pin: OutPinId,
+    ) -> usize {
+        let marker = self.get_node(pin.node).unwrap().get_marker();
+        marker.resolve_data_dependency(self, bytecode, scope_map, stack_ptr, self.out_pin(pin));
+        *scope_map.get(&pin).unwrap()
+    }
+
+    fn resolve_forward_pass_flow_until_finished(
+        &self,
+        bytecode: &mut Vec<Bytecode>,
+        scope_map: &mut HashMap<OutPinId, usize>,
+        stack_ptr: &mut usize,
+        node_viewer: &mut NodeViewer,
+        world: &mut World,
+        pin: InPinId,
+    ) {
+        let mut opt_pin = Some(pin);
+        while let Some(pin) = opt_pin {
+            let marker = self.get_node(pin.node).unwrap().get_marker();
+            opt_pin = marker.resolve_forward_pass_flow_until_finished(
+                self,
+                bytecode,
+                scope_map,
+                stack_ptr,
+                node_viewer,
+                world,
+                self.in_pin(pin),
+            );
+        }
     }
 }

@@ -5,7 +5,7 @@ use bevy::prelude::PartialReflect;
 use bevy::reflect::func::args::Ownership;
 use egui::{DragValue, Ui, Widget};
 use egui_snarl::ui::PinInfo;
-use egui_snarl::{InPin, InPinId, NodeId, OutPin, OutPinId, Snarl};
+use egui_snarl::{InPin, NodeId, OutPin, OutPinId, Snarl};
 use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
@@ -72,42 +72,6 @@ impl GraphNodeMarketTrait for Marker {
         unreachable!()
     }
 
-    fn has_header(&self, node_viewer: &mut NodeViewer, node: &GraphNode) -> bool {
-        true
-    }
-    fn show_header(
-        &self,
-        node_viewer: &mut NodeViewer,
-        node: NodeId,
-        inputs: &[InPin],
-        outputs: &[OutPin],
-        ui: &mut Ui,
-        snarl: &mut Snarl<GraphNode>,
-    ) {
-        let node = snarl.get_node_mut(node).unwrap();
-        let primitive_node = node.get_mut::<PrimitiveNode>().unwrap();
-        egui::ComboBox::from_label("Primitive")
-            .selected_text(format!("{}", primitive_node.primitive_type))
-            .show_ui(ui, |ui| {
-                ui.selectable_value(
-                    &mut primitive_node.primitive_type,
-                    PrimitiveType::I32(0),
-                    "i32",
-                );
-                ui.selectable_value(
-                    &mut primitive_node.primitive_type,
-                    PrimitiveType::F32(0.0),
-                    "f32",
-                );
-                ui.selectable_value(
-                    &mut primitive_node.primitive_type,
-                    PrimitiveType::String(String::new()),
-                    "String",
-                );
-            });
-        ui.end_row();
-    }
-
     fn show_output(
         &self,
         _node_viewer: &mut NodeViewer,
@@ -139,36 +103,61 @@ impl GraphNodeMarketTrait for Marker {
             }
         }
     }
-
-    fn show_node_menu(
-        &self,
-        node_viewer: &mut NodeViewer,
-        node: NodeId,
-        inputs: &[InPin],
-        outputs: &[OutPin],
-        ui: &mut Ui,
-        snarl: &mut Snarl<GraphNode>,
-    ) {
-    }
-
-    fn title(&self, graph_node: &GraphNode, node_viewer: &mut NodeViewer) -> String {
+    fn title(&self, _graph_node: &GraphNode, _node_viewer: &mut NodeViewer) -> String {
         "Primitive".to_string()
     }
 
-    fn inputs(&self, graph_node: &GraphNode, node_viewer: &mut NodeViewer) -> usize {
+    fn inputs(&self, _graph_node: &GraphNode, _node_viewer: &mut NodeViewer) -> usize {
         0
     }
 
-    fn outputs(&self, graph_node: &GraphNode, node_viewer: &mut NodeViewer) -> usize {
+    fn outputs(&self, _graph_node: &GraphNode, _node_viewer: &mut NodeViewer) -> usize {
         1
+    }
+
+    fn show_header(
+        &self,
+        _node_viewer: &mut NodeViewer,
+        node: NodeId,
+        _inputs: &[InPin],
+        _outputs: &[OutPin],
+        ui: &mut Ui,
+        snarl: &mut Snarl<GraphNode>,
+    ) {
+        let node = snarl.get_node_mut(node).unwrap();
+        let primitive_node = node.get_mut::<PrimitiveNode>().unwrap();
+        egui::ComboBox::from_label("Primitive")
+            .selected_text(format!("{}", primitive_node.primitive_type))
+            .show_ui(ui, |ui| {
+                ui.selectable_value(
+                    &mut primitive_node.primitive_type,
+                    PrimitiveType::I32(0),
+                    "i32",
+                );
+                ui.selectable_value(
+                    &mut primitive_node.primitive_type,
+                    PrimitiveType::F32(0.0),
+                    "f32",
+                );
+                ui.selectable_value(
+                    &mut primitive_node.primitive_type,
+                    PrimitiveType::String(String::new()),
+                    "String",
+                );
+            });
+        ui.end_row();
+    }
+
+    fn has_header(&self, _node_viewer: &mut NodeViewer, _node: &GraphNode) -> bool {
+        true
     }
 
     fn resolve_data_dependency(
         &self,
+        snarl: &Snarl<GraphNode>,
         bytecode: &mut Vec<Bytecode>,
         scope_map: &mut HashMap<OutPinId, usize>,
         stack_ptr: &mut usize,
-        snarl: &Snarl<GraphNode>,
         out_pin_id: OutPinId,
     ) {
         let primitive_type = snarl
@@ -187,7 +176,7 @@ impl GraphNodeMarketTrait for Marker {
     fn get_data_out(
         &self,
         out_pin: OutPinId,
-        node_viewer: &mut NodeViewer,
+        _node_viewer: &mut NodeViewer,
         snarl: &mut Snarl<GraphNode>,
     ) -> Option<(Box<dyn PartialReflect>, Ownership)> {
         let node = snarl

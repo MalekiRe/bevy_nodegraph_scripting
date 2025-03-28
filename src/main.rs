@@ -333,6 +333,7 @@ impl Clone for Value {
 pub enum Bytecode {
     Pop,
     Push(Value),
+    Clone(usize),
     Dup(usize),
     Ref(usize),
     Mut(usize),
@@ -344,7 +345,7 @@ pub enum Bytecode {
     Query(QueryWrapper),
     IterRef,
     NextMut,
-    Apply(usize),
+    Apply,
     Jump(usize),
 }
 
@@ -364,7 +365,7 @@ impl Debug for QueryWrapper {
 
 impl Bytecode {
     pub fn run(world: &mut World, bytecode: Vec<Bytecode>) {
-        let mut map: HashMap<TypeId, ComponentId> = HashMap::default();
+        /*let mut map: HashMap<TypeId, ComponentId> = HashMap::default();
         for c in world.components().iter_registered() {
             map.insert(c.type_id().unwrap(), c.id());
         }
@@ -614,6 +615,6 @@ impl Bytecode {
         }
         for garbage_data in potentially_garbage_data {
             drop(unsafe { Box::from_raw(garbage_data) });
-        }
+        }*/
     }
 }

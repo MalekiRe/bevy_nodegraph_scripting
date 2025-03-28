@@ -1,12 +1,14 @@
-use crate::nodes::{GraphNode, GraphNodeMarketTrait, GraphNodeTrait};
+use crate::Bytecode;
+use crate::nodes::{GraphCompileExt, GraphNode, GraphNodeMarketTrait, GraphNodeTrait};
 use crate::ui::{NodeViewer, PinInfoTrait, TraitExtTuple};
-use bevy::prelude::PartialReflect;
+use bevy::prelude::{PartialReflect, World};
 use bevy::reflect::func::args::Ownership;
 use bevy::render::render_resource::binding_types::sampler;
 use egui::{ComboBox, Ui};
 use egui_snarl::ui::PinInfo;
 use egui_snarl::{InPin, InPinId, NodeId, OutPin, OutPinId, Snarl};
 use std::any::Any;
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
 #[derive(Clone)]
@@ -50,6 +52,10 @@ impl GraphNodeMarketTrait for Marker {
         ui: &mut Ui,
         snarl: &mut Snarl<GraphNode>,
     ) -> PinInfo {
+        if pin.id.input == 0 {
+            return pin.triangle_pin();
+        }
+
         if let Some(input) = self.get_data_in(pin.id, node_viewer, snarl) {
             ui.label(input.get_string_rep());
             pin.circle_pin((input.0.as_ref(), input.1))
@@ -81,7 +87,7 @@ impl GraphNodeMarketTrait for Marker {
         let Some(data) = self.get_data_in(
             InPinId {
                 node: out_pin.node,
-                input: 0,
+                input: 1,
             },
             node_viewer,
             snarl,
@@ -107,6 +113,9 @@ impl GraphNodeMarketTrait for Marker {
         ui: &mut Ui,
         snarl: &mut Snarl<GraphNode>,
     ) -> PinInfo {
+        if pin.id.output == 0 {
+            return pin.triangle_pin();
+        }
         if let Some(awa) = self.get_data_out(pin.id, node_viewer, snarl) {
             ui.label(awa.get_string_rep());
             pin.circle_pin((awa.0.as_ref(), awa.1))
@@ -117,12 +126,12 @@ impl GraphNodeMarketTrait for Marker {
 
     fn show_node_menu(
         &self,
-        node_viewer: &mut NodeViewer,
-        node: NodeId,
-        inputs: &[InPin],
-        outputs: &[OutPin],
-        ui: &mut Ui,
-        snarl: &mut Snarl<GraphNode>,
+        _node_viewer: &mut NodeViewer,
+        _node: NodeId,
+        _inputs: &[InPin],
+        _outputs: &[OutPin],
+        _ui: &mut Ui,
+        _snarl: &mut Snarl<GraphNode>,
     ) {
     }
 
@@ -131,11 +140,11 @@ impl GraphNodeMarketTrait for Marker {
     }
 
     fn inputs(&self, graph_node: &GraphNode, node_viewer: &mut NodeViewer) -> usize {
-        1
+        2
     }
 
     fn outputs(&self, graph_node: &GraphNode, node_viewer: &mut NodeViewer) -> usize {
-        1
+        2
     }
 
     fn show_header(
@@ -165,5 +174,19 @@ impl GraphNodeMarketTrait for Marker {
 
     fn has_header(&self, node_viewer: &mut NodeViewer, node: &GraphNode) -> bool {
         true
+    }
+
+    fn resolve_forward_pass_flow_until_finished(
+        &self,
+        snarl: &Snarl<GraphNode>,
+        bytecode: &mut Vec<Bytecode>,
+        scope_map: &mut HashMap<OutPinId, usize>,
+        stack_ptr: &mut usize,
+        node_viewer: &mut NodeViewer,
+        world: &mut World,
+        pin: InPin,
+    ) -> Option<InPinId> {
+        let dependency = snarl.resolve_data_dependency(bytecode, scope_map, stack_ptr, *pin.remotes.first().unwrap());
+
     }
 }

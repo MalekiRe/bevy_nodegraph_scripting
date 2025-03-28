@@ -1,10 +1,13 @@
-use crate::nodes::{GraphNode, GraphNodeMarketTrait, GraphNodeTrait};
+use crate::Bytecode;
+use crate::nodes::{GraphCompileExt, GraphNode, GraphNodeMarketTrait, GraphNodeTrait};
 use crate::ui::{NodeViewer, PinInfoTrait, TraitExtTuple};
+use bevy::prelude::World;
 use bevy::reflect::func::args::Ownership;
 use egui::Ui;
 use egui_snarl::ui::PinInfo;
-use egui_snarl::{InPin, InPinId, NodeId, OutPin, Snarl};
+use egui_snarl::{InPin, InPinId, NodeId, OutPin, OutPinId, Snarl};
 use std::any::Any;
+use std::collections::HashMap;
 
 #[derive(Default)]
 pub struct ApplyNode;
@@ -96,5 +99,50 @@ impl GraphNodeMarketTrait for Marker {
 
     fn outputs(&self, graph_node: &GraphNode, node_viewer: &mut NodeViewer) -> usize {
         1
+    }
+
+    fn resolve_forward_pass_flow_until_finished(
+        &self,
+        snarl: &Snarl<GraphNode>,
+        bytecode: &mut Vec<Bytecode>,
+        scope_map: &mut HashMap<OutPinId, usize>,
+        stack_ptr: &mut usize,
+        _node_viewer: &mut NodeViewer,
+        _world: &mut World,
+        pin: InPinId,
+    ) -> Option<InPinId> {
+        let a = snarl
+            .in_pin(InPinId {
+                node: pin.node,
+                input: 1,
+            })
+            .remotes
+            .first()
+            .unwrap()
+            .clone();
+        let b = snarl
+            .in_pin(InPinId {
+                node: pin.node,
+                input: 2,
+            })
+            .remotes
+            .first()
+            .unwrap()
+            .clone();
+        snarl.resolve_data_dependency(bytecode, scope_map, stack_ptr, a);
+        snarl.resolve_data_dependency(bytecode, scope_map, stack_ptr, b);
+        let a_position = scope_map.get(&a).unwrap();
+        let b_position = scope_map.get(&b).unwrap();
+        bytecode.push(Bytecode::Mut(a_position.clone()));
+        bytecode.push(Bytecode::Dup(b_position.clone()));
+        bytecode.push(Bytecode::Apply);
+        snarl
+            .out_pin(OutPinId {
+                node: pin.node,
+                output: 0,
+            })
+            .remotes
+            .first()
+            .map(|a| a.clone())
     }
 }
