@@ -1,142 +1,189 @@
-use crate::nodes::breakdown_node::BreakdownNode;
+use crate::Bytecode;
+/*use crate::nodes::breakdown_node::BreakdownNode;
 use crate::nodes::buildup_node::BuildupNode;
 use crate::nodes::for_node::ForNode;
 use crate::nodes::function_node::FunctionNode;
 use crate::nodes::if_else_node::IfElseNode;
 use crate::nodes::primitive_node::PrimitiveNode;
 use crate::nodes::query_node::QueryNode;
-use crate::nodes::tuple_breakdown_node::TupleBreakdownNode;
-
-pub mod breakdown_node;
+use crate::nodes::tuple_breakdown_node::TupleBreakdownNode;*/
+use crate::nodes::apply_node::ApplyNode;
+use crate::nodes::breakdown_node::BreakdownNode;
+use crate::nodes::function_node::FunctionNode;
+use crate::nodes::ownership_node::OwnershipNode;
+use crate::nodes::primitive_node::PrimitiveNode;
+use crate::ui::NodeViewer;
+use bevy::prelude::{Deref, DerefMut, PartialReflect, World};
+use bevy::reflect::func::args::Ownership;
+use egui::Ui;
+use egui_snarl::ui::{PinInfo, SnarlViewer};
+use egui_snarl::{InPin, InPinId, NodeId, OutPin, OutPinId, Snarl};
+use std::any::Any;
+use std::collections::HashMap;
+use crate::nodes::start_node::StartNode;
+/*pub mod breakdown_node;
 pub mod buildup_node;
 pub mod for_node;
 pub mod function_node;
+pub mod if_else_node;
 pub mod primitive_node;
 pub mod query_node;
-pub mod tuple_breakdown_node;
-pub mod if_else_node;
+pub mod tuple_breakdown_node;*/
 
-#[derive(Debug)]
-pub enum GraphNodeType {
-    Breakdown,
-    Buildup,
-    Primitive,
-    Function,
-    Start,
-    For,
-    Query,
-    TupleBreakdown,
-    IfElse,
-}
+pub mod apply_node;
+pub mod function_node;
+pub mod ownership_node;
+pub mod primitive_node;
+pub mod breakdown_node;
+pub mod start_node;
 
-pub enum GraphNode {
-    Breakdown(BreakdownNode),
-    Buildup(BuildupNode),
-    Primitive(PrimitiveNode),
-    Function(FunctionNode),
-    For(ForNode),
-    Query(QueryNode),
-    TupleBreakdown(TupleBreakdownNode),
-    IfElse(IfElseNode),
-    Start,
-}
+#[derive(Deref, DerefMut)]
+pub struct GraphNode(pub Box<dyn GraphNodeTrait>);
+
+unsafe impl Send for GraphNode {}
+unsafe impl Sync for GraphNode {}
 
 impl GraphNode {
-    pub fn get_type(&self) -> GraphNodeType {
-        match self {
-            GraphNode::Breakdown(_) => GraphNodeType::Breakdown,
-            GraphNode::Buildup(_) => GraphNodeType::Buildup,
-            GraphNode::Primitive(_) => GraphNodeType::Primitive,
-            GraphNode::Function(_) => GraphNodeType::Function,
-            GraphNode::Start => GraphNodeType::Start,
-            GraphNode::For(_) => GraphNodeType::For,
-            GraphNode::Query(_) => GraphNodeType::Query,
-            GraphNode::TupleBreakdown(_) => GraphNodeType::TupleBreakdown,
-            GraphNode::IfElse(_) => GraphNodeType::IfElse,
-        }
+    pub fn list() -> Vec<GraphNode> {
+        vec![
+            GraphNode(Box::new(StartNode::default())),
+            GraphNode(Box::new(PrimitiveNode::default())),
+            GraphNode(Box::new(FunctionNode::default())),
+            GraphNode(Box::new(OwnershipNode::default())),
+            GraphNode(Box::new(ApplyNode::default())),
+            GraphNode(Box::new(BreakdownNode::default())),
+        ]
     }
-    pub fn breakdown(&self) -> Option<&BreakdownNode> {
-        match self {
-            GraphNode::Breakdown(node) => Some(node),
-            _ => None,
-        }
+}
+
+pub trait GraphNodeTrait: Any {
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+    fn get_marker(&self) -> Box<dyn GraphNodeMarketTrait>;
+}
+
+impl dyn GraphNodeTrait {
+    fn get<T: 'static>(&self) -> Option<&T> {
+        self.as_any().downcast_ref::<T>()
     }
-    pub fn buildup(&self) -> Option<&BuildupNode> {
-        match self {
-            GraphNode::Buildup(node) => Some(node),
-            _ => None,
-        }
+    fn get_mut<T: 'static>(&mut self) -> Option<&mut T> {
+        self.as_any_mut().downcast_mut::<T>()
     }
-    pub fn primitive(&self) -> Option<&PrimitiveNode> {
-        match self {
-            GraphNode::Primitive(node) => Some(node),
-            _ => None,
-        }
+}
+
+pub trait GraphNodeMarketTrait {
+    fn show_input(
+        &self,
+        node_viewer: &mut NodeViewer,
+        pin: &InPin,
+        ui: &mut Ui,
+        snarl: &mut Snarl<GraphNode>,
+    ) -> PinInfo;
+    fn show_output(
+        &self,
+        node_viewer: &mut NodeViewer,
+        pin: &OutPin,
+        ui: &mut Ui,
+        snarl: &mut Snarl<GraphNode>,
+    ) -> PinInfo;
+
+    fn show_node_menu(
+        &self,
+        node_viewer: &mut NodeViewer,
+        node: NodeId,
+        inputs: &[InPin],
+        outputs: &[OutPin],
+        ui: &mut Ui,
+        snarl: &mut Snarl<GraphNode>,
+    ) {
     }
-    pub fn function(&self) -> Option<&FunctionNode> {
-        match self {
-            GraphNode::Function(node) => Some(node),
-            _ => None,
-        }
+
+    fn title(&self, graph_node: &GraphNode, node_viewer: &mut NodeViewer) -> String;
+    fn inputs(&self, graph_node: &GraphNode, node_viewer: &mut NodeViewer) -> usize;
+    fn outputs(&self, graph_node: &GraphNode, node_viewer: &mut NodeViewer) -> usize;
+
+    fn show_body(
+        &self,
+        node_viewer: &mut NodeViewer,
+        node: NodeId,
+        inputs: &[InPin],
+        outputs: &[OutPin],
+        ui: &mut Ui,
+        snarl: &mut Snarl<GraphNode>,
+    ) {
     }
-    pub fn r#for(&self) -> Option<&ForNode> {
-        match self {
-            GraphNode::For(node) => Some(node),
-            _ => None,
-        }
+
+    fn show_footer(
+        &self,
+        node_viewer: &mut NodeViewer,
+        node: NodeId,
+        inputs: &[InPin],
+        outputs: &[OutPin],
+        ui: &mut Ui,
+        snarl: &mut Snarl<GraphNode>,
+    ) {
     }
-    pub fn query(&self) -> Option<&QueryNode> {
-        match self {
-            GraphNode::Query(node) => Some(node),
-            _ => None,
-        }
+
+    fn show_header(
+        &self,
+        node_viewer: &mut NodeViewer,
+        node: NodeId,
+        inputs: &[InPin],
+        outputs: &[OutPin],
+        ui: &mut Ui,
+        snarl: &mut Snarl<GraphNode>,
+    ) {
     }
-    pub fn tuple_breakdown(&self) -> Option<&TupleBreakdownNode> {
-        match self {
-            GraphNode::TupleBreakdown(node) => Some(node),
-            _ => None,
-        }
+
+    fn has_body(&self, node_viewer: &mut NodeViewer, node: &GraphNode) -> bool {
+        false
     }
-    pub fn breakdown_mut(&mut self) -> Option<&mut BreakdownNode> {
-        match self {
-            GraphNode::Breakdown(node) => Some(node),
-            _ => None,
-        }
+
+    fn has_footer(&self, node_viewer: &mut NodeViewer, node: &GraphNode) -> bool {
+        false
     }
-    pub fn buildup_mut(&mut self) -> Option<&mut BuildupNode> {
-        match self {
-            GraphNode::Buildup(node) => Some(node),
-            _ => None,
-        }
+
+    fn has_header(&self, node_viewer: &mut NodeViewer, node: &GraphNode) -> bool {
+        false
     }
-    pub fn primitive_mut(&mut self) -> Option<&mut PrimitiveNode> {
-        match self {
-            GraphNode::Primitive(node) => Some(node),
-            _ => None,
-        }
+
+    fn resolve_data_dependency(
+        &self,
+        bytecode: &mut Vec<Bytecode>,
+        scope_map: &mut HashMap<OutPinId, usize>,
+        stack_ptr: &mut usize,
+        snarl: &Snarl<GraphNode>,
+        out_pin_id: OutPinId,
+    ) {
+        unimplemented!()
     }
-    pub fn function_mut(&mut self) -> Option<&mut FunctionNode> {
-        match self {
-            GraphNode::Function(node) => Some(node),
-            _ => None,
-        }
+    fn resolve_forward_pass_flow_until_finished(
+        &self,
+        bytecode: &mut Vec<Bytecode>,
+        mut next_pin: OutPin,
+        scope_map: &mut HashMap<OutPinId, usize>,
+        stack_ptr: &mut usize,
+        snarl: &Snarl<GraphNode>,
+        node_viewer: &mut NodeViewer,
+        world: &mut World,
+    ) {
+        unimplemented!()
     }
-    pub fn for_mut(&mut self) -> Option<&mut ForNode> {
-        match self {
-            GraphNode::For(node) => Some(node),
-            _ => None,
-        }
+
+    fn get_data_in(
+        &self,
+        in_pin: InPinId,
+        node_viewer: &mut NodeViewer,
+        snarl: &mut Snarl<GraphNode>,
+    ) -> Option<(Box<dyn PartialReflect>, Ownership)> {
+        None
     }
-    pub fn query_mut(&mut self) -> Option<&mut QueryNode> {
-        match self {
-            GraphNode::Query(node) => Some(node),
-            _ => None,
-        }
-    }
-    pub fn tuple_breakdown_mut(&mut self) -> Option<&mut TupleBreakdownNode> {
-        match self {
-            GraphNode::TupleBreakdown(node) => Some(node),
-            _ => None,
-        }
+    fn get_data_out(
+        &self,
+        out_pin: OutPinId,
+        node_viewer: &mut NodeViewer,
+        snarl: &mut Snarl<GraphNode>,
+    ) -> Option<(Box<dyn PartialReflect>, Ownership)> {
+        None
     }
 }

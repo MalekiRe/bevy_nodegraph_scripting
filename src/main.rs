@@ -2,7 +2,7 @@ mod compiler;
 mod nodes;
 mod ui;
 
-use crate::nodes::query_node::QueryDataType;
+/*use crate::nodes::query_node::QueryDataType;*/
 use crate::ui::uwu;
 use bevy::ecs::component::ComponentId;
 use bevy::ecs::query::{QueryData, QueryFilter, QueryIter};
@@ -17,6 +17,22 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::ops::DerefMut;
 use std::sync::{Arc, Mutex};
+
+pub enum QueryDataType {
+    Entity,
+    Ref(Box<dyn PartialReflect>),
+    Mut(Box<dyn PartialReflect>),
+}
+
+impl Clone for QueryDataType {
+    fn clone(&self) -> Self {
+        match self {
+            QueryDataType::Entity => QueryDataType::Entity,
+            QueryDataType::Ref(val) => QueryDataType::Ref(val.reflect_clone().unwrap()),
+            QueryDataType::Mut(val) => QueryDataType::Mut(val.reflect_clone().unwrap()),
+        }
+    }
+}
 
 fn main() {
     use bevy::reflect::Tuple;
@@ -360,7 +376,9 @@ impl Bytecode {
         println!("bytecode: {:#?}", bytecode);
         loop {
             println!("stack: {:?}", stack);
-            let Some(bytecode) = bytecode.get(ip) else { break };
+            let Some(bytecode) = bytecode.get(ip) else {
+                break;
+            };
             //println!("stack: {:?}", stack);
             match bytecode {
                 Bytecode::Pop => {
@@ -430,7 +448,7 @@ impl Bytecode {
                             let mut s = unsafe { &mut **val }.reflect_mut().as_struct().unwrap();
                             let field = s.field_at_mut(*field).unwrap() as *mut dyn PartialReflect;
                             field
-                        },
+                        }
                         Value::Ref(_) => unreachable!(),
                         Value::Box(val) => {
                             let mut s = val.reflect_mut().as_struct().unwrap();

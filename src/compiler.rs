@@ -1,8 +1,8 @@
 use crate::nodes::GraphNode;
-use crate::nodes::breakdown_node::BreakdownType;
+/*use crate::nodes::breakdown_node::BreakdownType;
 use crate::nodes::primitive_node::PrimitiveType;
-use crate::nodes::query_node::QueryDataType;
-use crate::ui::{NodeTrait, NodeViewer};
+use crate::nodes::query_node::QueryDataType;*/
+use crate::ui::NodeViewer;
 use crate::{Bytecode, QueryWrapper, Value};
 use bevy::ecs::component::ComponentId;
 use bevy::ecs::world::FilteredEntityMut;
@@ -17,7 +17,7 @@ pub(crate) fn compile(
     node_viewer: &mut NodeViewer,
     snarl: &Snarl<GraphNode>,
 ) -> Vec<Bytecode> {
-    let mut start = None;
+    /*let mut start = None;
     for (i, node) in snarl.nodes().enumerate() {
         match node {
             GraphNode::Start => start = Some(i),
@@ -48,9 +48,10 @@ pub(crate) fn compile(
         world,
     );
 
-    bytecode
+    bytecode*/
+    todo!()
 }
-
+/*
 fn resolve_forward_pass_flow_until_finished(
     bytecode: &mut Vec<Bytecode>,
     mut next_pin: OutPin,
@@ -256,3 +257,4 @@ fn resolve_data_dependency(
         }
     }
 }
+*/
