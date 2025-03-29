@@ -62,30 +62,15 @@ impl GraphNodeTrait for PrimitiveNode {
 
 struct Marker;
 impl GraphNodeMarketTrait for Marker {
-    fn show_input(
-        &self,
-        _node_viewer: &mut NodeViewer,
-        _pin: &InPin,
-        _ui: &mut Ui,
-        _snarl: &mut Snarl<GraphNode>,
-    ) -> PinInfo {
-        unreachable!()
+    fn show_input(&self, _node_viewer: &mut NodeViewer, pin: &InPin, _ui: &mut Ui, _snarl: &mut Snarl<GraphNode>) -> PinInfo {
+        pin.triangle_pin()
     }
 
-    fn show_output(
-        &self,
-        _node_viewer: &mut NodeViewer,
-        pin: &OutPin,
-        ui: &mut Ui,
-        snarl: &mut Snarl<GraphNode>,
-    ) -> PinInfo {
-        match &mut snarl
-            .get_node_mut(pin.id.node)
-            .unwrap()
-            .get_mut::<PrimitiveNode>()
-            .unwrap()
-            .primitive_type
-        {
+    fn show_output(&self, _node_viewer: &mut NodeViewer, pin: &OutPin, ui: &mut Ui, snarl: &mut Snarl<GraphNode>) -> PinInfo {
+        if pin.id.output == 0 {
+            return pin.triangle_pin();
+        }
+        match &mut snarl.get_node_mut(pin.id.node).unwrap().get_mut::<PrimitiveNode>().unwrap().primitive_type {
             PrimitiveType::I32(val) => {
                 ui.label("i32");
                 DragValue::new(val).ui(ui);
@@ -108,43 +93,21 @@ impl GraphNodeMarketTrait for Marker {
     }
 
     fn inputs(&self, _graph_node: &GraphNode, _node_viewer: &mut NodeViewer) -> usize {
-        0
-    }
-
-    fn outputs(&self, _graph_node: &GraphNode, _node_viewer: &mut NodeViewer) -> usize {
         1
     }
 
-    fn show_header(
-        &self,
-        _node_viewer: &mut NodeViewer,
-        node: NodeId,
-        _inputs: &[InPin],
-        _outputs: &[OutPin],
-        ui: &mut Ui,
-        snarl: &mut Snarl<GraphNode>,
-    ) {
+    fn outputs(&self, _graph_node: &GraphNode, _node_viewer: &mut NodeViewer) -> usize {
+        2
+    }
+
+    fn show_header(&self, _node_viewer: &mut NodeViewer, node: NodeId, _inputs: &[InPin], _outputs: &[OutPin], ui: &mut Ui, snarl: &mut Snarl<GraphNode>) {
         let node = snarl.get_node_mut(node).unwrap();
         let primitive_node = node.get_mut::<PrimitiveNode>().unwrap();
-        egui::ComboBox::from_label("Primitive")
-            .selected_text(format!("{}", primitive_node.primitive_type))
-            .show_ui(ui, |ui| {
-                ui.selectable_value(
-                    &mut primitive_node.primitive_type,
-                    PrimitiveType::I32(0),
-                    "i32",
-                );
-                ui.selectable_value(
-                    &mut primitive_node.primitive_type,
-                    PrimitiveType::F32(0.0),
-                    "f32",
-                );
-                ui.selectable_value(
-                    &mut primitive_node.primitive_type,
-                    PrimitiveType::String(String::new()),
-                    "String",
-                );
-            });
+        egui::ComboBox::from_label("Primitive").selected_text(format!("{}", primitive_node.primitive_type)).show_ui(ui, |ui| {
+            ui.selectable_value(&mut primitive_node.primitive_type, PrimitiveType::I32(0), "i32");
+            ui.selectable_value(&mut primitive_node.primitive_type, PrimitiveType::F32(0.0), "f32");
+            ui.selectable_value(&mut primitive_node.primitive_type, PrimitiveType::String(String::new()), "String");
+        });
         ui.end_row();
     }
 
@@ -152,38 +115,16 @@ impl GraphNodeMarketTrait for Marker {
         true
     }
 
-    fn resolve_data_dependency(
-        &self,
-        snarl: &Snarl<GraphNode>,
-        bytecode: &mut Vec<Bytecode>,
-        scope_map: &mut HashMap<OutPinId, usize>,
-        stack_ptr: &mut usize,
-        out_pin_id: OutPinId,
-    ) {
-        let primitive_type = snarl
-            .get_node(out_pin_id.node)
-            .unwrap()
-            .get::<PrimitiveNode>()
-            .unwrap()
-            .primitive_type
-            .clone();
+    fn resolve_data_dependency(&self, snarl: &Snarl<GraphNode>, bytecode: &mut Vec<Bytecode>, scope_map: &mut HashMap<OutPinId, usize>, stack_ptr: &mut usize, pin: OutPin) {
+        let primitive_type = snarl.get_node(pin.id.node).unwrap().get::<PrimitiveNode>().unwrap().primitive_type.clone();
 
         bytecode.push(Bytecode::Push(Value::Box(primitive_type.as_reflect())));
-        scope_map.insert(out_pin_id, *stack_ptr);
+        scope_map.insert(pin.id, *stack_ptr);
         *stack_ptr += 1;
     }
 
-    fn get_data_out(
-        &self,
-        out_pin: OutPinId,
-        _node_viewer: &mut NodeViewer,
-        snarl: &mut Snarl<GraphNode>,
-    ) -> Option<(Box<dyn PartialReflect>, Ownership)> {
-        let node = snarl
-            .get_node(out_pin.node)
-            .unwrap()
-            .get::<PrimitiveNode>()
-            .unwrap();
+    fn get_data_out(&self, out_pin: OutPinId, _node_viewer: &mut NodeViewer, snarl: &mut Snarl<GraphNode>) -> Option<(Box<dyn PartialReflect>, Ownership)> {
+        let node = snarl.get_node(out_pin.node).unwrap().get::<PrimitiveNode>().unwrap();
         Some((node.primitive_type.as_reflect(), Ownership::Owned))
     }
 }

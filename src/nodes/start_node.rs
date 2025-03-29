@@ -23,23 +23,11 @@ impl GraphNodeTrait for StartNode {
 }
 struct Marker;
 impl GraphNodeMarketTrait for Marker {
-    fn show_input(
-        &self,
-        _node_viewer: &mut NodeViewer,
-        _pin: &InPin,
-        _ui: &mut Ui,
-        _snarl: &mut Snarl<GraphNode>,
-    ) -> PinInfo {
+    fn show_input(&self, _node_viewer: &mut NodeViewer, _pin: &InPin, _ui: &mut Ui, _snarl: &mut Snarl<GraphNode>) -> PinInfo {
         unreachable!()
     }
 
-    fn show_output(
-        &self,
-        _node_viewer: &mut NodeViewer,
-        _pin: &OutPin,
-        _ui: &mut Ui,
-        _snarl: &mut Snarl<GraphNode>,
-    ) -> PinInfo {
+    fn show_output(&self, _node_viewer: &mut NodeViewer, _pin: &OutPin, _ui: &mut Ui, _snarl: &mut Snarl<GraphNode>) -> PinInfo {
         PinInfo::triangle().with_fill(FLOW_COLOR)
     }
 

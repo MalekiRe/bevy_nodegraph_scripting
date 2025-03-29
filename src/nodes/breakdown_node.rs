@@ -43,10 +43,7 @@ impl BreakdownType {
 
 impl Default for BreakdownNode {
     fn default() -> Self {
-        Self {
-            breakdown_type: BreakdownType::Owned,
-            num_fields: 0,
-        }
+        Self { breakdown_type: BreakdownType::Owned, num_fields: 0 }
     }
 }
 
@@ -66,39 +63,17 @@ impl GraphNodeTrait for BreakdownNode {
 
 struct Marker;
 impl GraphNodeMarketTrait for Marker {
-    fn show_input(
-        &self,
-        node_viewer: &mut NodeViewer,
-        pin: &InPin,
-        ui: &mut Ui,
-        snarl: &mut Snarl<GraphNode>,
-    ) -> PinInfo {
-        snarl
-            .get_node_mut(pin.id.node)
-            .unwrap()
-            .get_mut::<BreakdownNode>()
-            .unwrap()
-            .num_fields = 0;
+    fn show_input(&self, node_viewer: &mut NodeViewer, pin: &InPin, ui: &mut Ui, snarl: &mut Snarl<GraphNode>) -> PinInfo {
+        snarl.get_node_mut(pin.id.node).unwrap().get_mut::<BreakdownNode>().unwrap().num_fields = 0;
         let Some(awa) = self.get_data_in(pin.id, node_viewer, snarl) else {
             return PinInfo::circle();
         };
-        snarl
-            .get_node_mut(pin.id.node)
-            .unwrap()
-            .get_mut::<BreakdownNode>()
-            .unwrap()
-            .num_fields = awa.0.reflect_ref().as_struct().unwrap().field_len();
+        snarl.get_node_mut(pin.id.node).unwrap().get_mut::<BreakdownNode>().unwrap().num_fields = awa.0.reflect_ref().as_struct().unwrap().field_len();
         ui.label(format!("{}", awa.get_string_rep()));
         pin.circle_pin((awa.0.as_ref(), awa.1))
     }
 
-    fn show_output(
-        &self,
-        node_viewer: &mut NodeViewer,
-        pin: &OutPin,
-        ui: &mut Ui,
-        snarl: &mut Snarl<GraphNode>,
-    ) -> PinInfo {
+    fn show_output(&self, node_viewer: &mut NodeViewer, pin: &OutPin, ui: &mut Ui, snarl: &mut Snarl<GraphNode>) -> PinInfo {
         let Some(awa) = self.get_data_out(pin.id, node_viewer, snarl) else {
             return PinInfo::circle();
         };
@@ -118,98 +93,39 @@ impl GraphNodeMarketTrait for Marker {
         graph_node.get::<BreakdownNode>().unwrap().num_fields
     }
 
-    fn show_header(
-        &self,
-        node_viewer: &mut NodeViewer,
-        node: NodeId,
-        inputs: &[InPin],
-        outputs: &[OutPin],
-        ui: &mut Ui,
-        snarl: &mut Snarl<GraphNode>,
-    ) {
-        let node = snarl
-            .get_node_mut(node)
-            .unwrap()
-            .get_mut::<BreakdownNode>()
-            .unwrap();
-        ComboBox::from_label("Breakdown")
-            .selected_text(format!("{}", node.breakdown_type))
-            .show_ui(ui, |ui| {
-                ui.selectable_value(&mut node.breakdown_type, BreakdownType::Owned, "Owned");
-                ui.selectable_value(&mut node.breakdown_type, BreakdownType::Reference, "&");
-                ui.selectable_value(
-                    &mut node.breakdown_type,
-                    BreakdownType::MutReference,
-                    "&mut",
-                );
-            });
+    fn show_header(&self, node_viewer: &mut NodeViewer, node: NodeId, inputs: &[InPin], outputs: &[OutPin], ui: &mut Ui, snarl: &mut Snarl<GraphNode>) {
+        let node = snarl.get_node_mut(node).unwrap().get_mut::<BreakdownNode>().unwrap();
+        ComboBox::from_label("Breakdown").selected_text(format!("{}", node.breakdown_type)).show_ui(ui, |ui| {
+            ui.selectable_value(&mut node.breakdown_type, BreakdownType::Owned, "Owned");
+            ui.selectable_value(&mut node.breakdown_type, BreakdownType::Reference, "&");
+            ui.selectable_value(&mut node.breakdown_type, BreakdownType::MutReference, "&mut");
+        });
     }
 
     fn has_header(&self, node_viewer: &mut NodeViewer, node: &GraphNode) -> bool {
         true
     }
 
-    fn get_data_in(
-        &self,
-        in_pin: InPinId,
-        node_viewer: &mut NodeViewer,
-        snarl: &mut Snarl<GraphNode>,
-    ) -> Option<(Box<dyn PartialReflect>, Ownership)> {
+    fn get_data_in(&self, in_pin: InPinId, node_viewer: &mut NodeViewer, snarl: &mut Snarl<GraphNode>) -> Option<(Box<dyn PartialReflect>, Ownership)> {
         let binding = snarl.in_pin(in_pin);
         let Some(remote) = binding.remotes.first() else {
             return None;
         };
-        snarl
-            .get_node(remote.node)
-            .unwrap()
-            .get_marker()
-            .get_data_out(*remote, node_viewer, snarl)
+        snarl.get_node(remote.node).unwrap().get_marker().get_data_out(*remote, node_viewer, snarl)
     }
 
-    fn get_data_out(
-        &self,
-        out_pin: OutPinId,
-        node_viewer: &mut NodeViewer,
-        snarl: &mut Snarl<GraphNode>,
-    ) -> Option<(Box<dyn PartialReflect>, Ownership)> {
+    fn get_data_out(&self, out_pin: OutPinId, node_viewer: &mut NodeViewer, snarl: &mut Snarl<GraphNode>) -> Option<(Box<dyn PartialReflect>, Ownership)> {
         let pin = snarl.out_pin(out_pin);
-        let Some(((breakdown_struct, ownership))) = self.get_data_in(
-            InPinId {
-                node: pin.id.node,
-                input: 0,
-            },
-            node_viewer,
-            snarl,
-        ) else {
+        let Some(((breakdown_struct, ownership))) = self.get_data_in(InPinId { node: pin.id.node, input: 0 }, node_viewer, snarl) else {
             return None;
         };
-        let Ok(awa) = breakdown_struct
-            .reflect_clone()
-            .unwrap()
-            .reflect_owned()
-            .into_struct()
-        else {
+        let Ok(awa) = breakdown_struct.reflect_clone().unwrap().reflect_owned().into_struct() else {
             return None;
         };
         let field = awa.field_at(pin.id.output).unwrap();
-        let field_type = field
-            .reflect_type_path()
-            .rsplit_once("::")
-            .or_else(|| Some(("", field.reflect_type_path())))
-            .unwrap()
-            .1;
-        let field_name = awa
-            .get_represented_struct_info()
-            .unwrap()
-            .field_at(pin.id.output)
-            .unwrap()
-            .name();
-        let breakdown_type = &snarl
-            .get_node(pin.id.node)
-            .unwrap()
-            .get::<BreakdownNode>()
-            .unwrap()
-            .breakdown_type;
+        let field_type = field.reflect_type_path().rsplit_once("::").or_else(|| Some(("", field.reflect_type_path()))).unwrap().1;
+        let field_name = awa.get_represented_struct_info().unwrap().field_at(pin.id.output).unwrap().name();
+        let breakdown_type = &snarl.get_node(pin.id.node).unwrap().get::<BreakdownNode>().unwrap().breakdown_type;
         let field_type = match breakdown_type {
             BreakdownType::Reference => format!("&{field_type}"),
             BreakdownType::MutReference => format!("&mut {field_type}"),

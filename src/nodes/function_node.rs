@@ -17,10 +17,7 @@ pub struct FunctionNode {
 
 impl Default for FunctionNode {
     fn default() -> Self {
-        Self {
-            associated_type: None,
-            function: hello_world.into_function(),
-        }
+        Self { associated_type: None, function: hello_world.into_function() }
     }
 }
 
@@ -40,22 +37,11 @@ impl GraphNodeTrait for FunctionNode {
 
 struct Marker;
 impl GraphNodeMarketTrait for Marker {
-    fn show_input(
-        &self,
-        node_viewer: &mut NodeViewer,
-        pin: &InPin,
-        ui: &mut Ui,
-        snarl: &mut Snarl<GraphNode>,
-    ) -> PinInfo {
+    fn show_input(&self, node_viewer: &mut NodeViewer, pin: &InPin, ui: &mut Ui, snarl: &mut Snarl<GraphNode>) -> PinInfo {
         if pin.id.input == 0 {
             return pin.triangle_pin();
         }
-        let function = &snarl
-            .get_node(pin.id.node)
-            .unwrap()
-            .get::<FunctionNode>()
-            .unwrap()
-            .function;
+        let function = &snarl.get_node(pin.id.node).unwrap().get::<FunctionNode>().unwrap().function;
         let signature = &function.info().signatures()[0];
         let arg = signature.args().get(pin.id.input - 1).unwrap();
         let type_ident = arg.ty().short_path();
@@ -70,22 +56,11 @@ impl GraphNodeMarketTrait for Marker {
         PinInfo::circle().with_fill(Color32::from_rgb(r, g, b))
     }
 
-    fn show_output(
-        &self,
-        node_viewer: &mut NodeViewer,
-        pin: &OutPin,
-        ui: &mut Ui,
-        snarl: &mut Snarl<GraphNode>,
-    ) -> PinInfo {
+    fn show_output(&self, node_viewer: &mut NodeViewer, pin: &OutPin, ui: &mut Ui, snarl: &mut Snarl<GraphNode>) -> PinInfo {
         if pin.id.output == 0 {
             return pin.triangle_pin();
         }
-        let function = &snarl
-            .get_node(pin.id.node)
-            .unwrap()
-            .get::<FunctionNode>()
-            .unwrap()
-            .function;
+        let function = &snarl.get_node(pin.id.node).unwrap().get::<FunctionNode>().unwrap().function;
         let signature = &function.info().signatures()[0];
         ui.label(signature.return_info().type_path_table().ident().unwrap());
         let mut hasher = DefaultHasher::new();
@@ -97,78 +72,41 @@ impl GraphNodeMarketTrait for Marker {
         PinInfo::circle().with_fill(Color32::from_rgb(r, g, b))
     }
 
-    fn show_node_menu(
-        &self,
-        node_viewer: &mut NodeViewer,
-        node: NodeId,
-        inputs: &[InPin],
-        outputs: &[OutPin],
-        ui: &mut Ui,
-        snarl: &mut Snarl<GraphNode>,
-    ) {
-    }
+    fn show_node_menu(&self, node_viewer: &mut NodeViewer, node: NodeId, inputs: &[InPin], outputs: &[OutPin], ui: &mut Ui, snarl: &mut Snarl<GraphNode>) {}
 
     fn has_header(&self, node_viewer: &mut NodeViewer, node: &GraphNode) -> bool {
         true
     }
 
-    fn show_header(
-        &self,
-        node_viewer: &mut NodeViewer,
-        node: NodeId,
-        inputs: &[InPin],
-        outputs: &[OutPin],
-        ui: &mut Ui,
-        snarl: &mut Snarl<GraphNode>,
-    ) {
+    fn show_header(&self, node_viewer: &mut NodeViewer, node: NodeId, inputs: &[InPin], outputs: &[OutPin], ui: &mut Ui, snarl: &mut Snarl<GraphNode>) {
         let mut changed = false;
 
-        let node = snarl
-            .get_node_mut(node)
-            .unwrap()
-            .get_mut::<FunctionNode>()
-            .unwrap();
+        let node = snarl.get_node_mut(node).unwrap().get_mut::<FunctionNode>().unwrap();
 
         struct DynReflectWrapper(Option<Box<dyn Reflect>>);
         impl PartialEq for DynReflectWrapper {
             fn eq(&self, other: &Self) -> bool {
                 match (&self.0, &other.0) {
-                    (Some(a), Some(b)) => {
-                        a.reflect_type_info().type_id() == b.reflect_type_info().type_id()
-                    }
+                    (Some(a), Some(b)) => a.reflect_type_info().type_id() == b.reflect_type_info().type_id(),
                     (None, None) => true,
                     _ => false,
                 }
             }
         }
 
-        let mut current_type = DynReflectWrapper(
-            node.associated_type
-                .as_ref()
-                .map(|a| a.reflect_clone().unwrap()),
-        );
+        let mut current_type = DynReflectWrapper(node.associated_type.as_ref().map(|a| a.reflect_clone().unwrap()));
         let name = match &current_type.0 {
             None => "None",
             Some(val) => val.reflect_type_ident().unwrap(),
         };
-        egui::ComboBox::from_label("Type")
-            .selected_text(format!("{}", name))
-            .show_ui(ui, |ui| {
-                ui.selectable_value(&mut current_type, DynReflectWrapper(None), "None");
-                for f in &node_viewer.function_registry.associated_types {
-                    ui.selectable_value(
-                        &mut current_type,
-                        DynReflectWrapper(Some(f.reflect_clone().unwrap())),
-                        f.reflect_type_ident().unwrap(),
-                    );
-                }
-            });
+        egui::ComboBox::from_label("Type").selected_text(format!("{}", name)).show_ui(ui, |ui| {
+            ui.selectable_value(&mut current_type, DynReflectWrapper(None), "None");
+            for f in &node_viewer.function_registry.associated_types {
+                ui.selectable_value(&mut current_type, DynReflectWrapper(Some(f.reflect_clone().unwrap())), f.reflect_type_ident().unwrap());
+            }
+        });
         let set_function_to_default = {
-            let temp = DynReflectWrapper(
-                node.associated_type
-                    .as_ref()
-                    .map(|a| a.reflect_clone().unwrap()),
-            );
+            let temp = DynReflectWrapper(node.associated_type.as_ref().map(|a| a.reflect_clone().unwrap()));
             if temp != current_type { true } else { false }
         };
         node.associated_type = current_type.0;
@@ -184,12 +122,7 @@ impl GraphNodeMarketTrait for Marker {
         if set_function_to_default {
             changed = true;
             if let Some(selected) = &node.associated_type {
-                for f in node_viewer
-                    .function_registry
-                    .associated_functions
-                    .get(&selected.reflect_type_info().type_id())
-                    .unwrap()
-                {
+                for f in node_viewer.function_registry.associated_functions.get(&selected.reflect_type_info().type_id()).unwrap() {
                     current_function.0 = f.1.clone();
                 }
             } else {
@@ -199,42 +132,17 @@ impl GraphNodeMarketTrait for Marker {
             }
         }
 
-        egui::ComboBox::from_label("Function")
-            .selected_text(format!(
-                "{}",
-                node.function
-                    .name()
-                    .unwrap()
-                    .rsplit_once("::")
-                    .or_else(|| Some(("", node.function.name().unwrap())))
-                    .unwrap()
-                    .1
-                    .to_string()
-            ))
-            .show_ui(ui, |ui| {
-                if let Some(selected) = &node.associated_type {
-                    for f in node_viewer
-                        .function_registry
-                        .associated_functions
-                        .get(&selected.reflect_type_info().type_id())
-                        .unwrap()
-                    {
-                        ui.selectable_value(
-                            &mut current_function,
-                            DynFunctionWrapper(f.1.clone()),
-                            f.0,
-                        );
-                    }
-                } else {
-                    for f in &node_viewer.function_registry.freestanding_functions {
-                        ui.selectable_value(
-                            &mut current_function,
-                            DynFunctionWrapper(f.1.clone()),
-                            f.0,
-                        );
-                    }
+        egui::ComboBox::from_label("Function").selected_text(format!("{}", node.function.name().unwrap().rsplit_once("::").or_else(|| Some(("", node.function.name().unwrap()))).unwrap().1.to_string())).show_ui(ui, |ui| {
+            if let Some(selected) = &node.associated_type {
+                for f in node_viewer.function_registry.associated_functions.get(&selected.reflect_type_info().type_id()).unwrap() {
+                    ui.selectable_value(&mut current_function, DynFunctionWrapper(f.1.clone()), f.0);
                 }
-            });
+            } else {
+                for f in &node_viewer.function_registry.freestanding_functions {
+                    ui.selectable_value(&mut current_function, DynFunctionWrapper(f.1.clone()), f.0);
+                }
+            }
+        });
         if DynFunctionWrapper(node.function.clone()) != current_function {
             changed = true;
         }
@@ -254,42 +162,16 @@ impl GraphNodeMarketTrait for Marker {
     }
 
     fn inputs(&self, graph_node: &GraphNode, node_viewer: &mut NodeViewer) -> usize {
-        graph_node
-            .get::<FunctionNode>()
-            .unwrap()
-            .function
-            .info()
-            .signatures()[0]
-            .arg_count()
-            + 1
+        graph_node.get::<FunctionNode>().unwrap().function.info().signatures()[0].arg_count() + 1
     }
 
     fn outputs(&self, graph_node: &GraphNode, node_viewer: &mut NodeViewer) -> usize {
-        let ret_info = graph_node
-            .get::<FunctionNode>()
-            .unwrap()
-            .function
-            .info()
-            .signatures()[0]
-            .return_info()
-            .clone();
+        let ret_info = graph_node.get::<FunctionNode>().unwrap().function.info().signatures()[0].return_info().clone();
         if ret_info.ty().is::<()>() { 1 } else { 2 }
     }
 
-    fn get_data_out(
-        &self,
-        out_pin: OutPinId,
-        node_viewer: &mut NodeViewer,
-        snarl: &mut Snarl<GraphNode>,
-    ) -> Option<(Box<dyn PartialReflect>, Ownership)> {
-        let signature = &snarl
-            .get_node(out_pin.node)
-            .unwrap()
-            .get::<FunctionNode>()
-            .unwrap()
-            .function
-            .info()
-            .signatures()[0];
+    fn get_data_out(&self, out_pin: OutPinId, node_viewer: &mut NodeViewer, snarl: &mut Snarl<GraphNode>) -> Option<(Box<dyn PartialReflect>, Ownership)> {
+        let signature = &snarl.get_node(out_pin.node).unwrap().get::<FunctionNode>().unwrap().function.info().signatures()[0];
         let arg = signature.return_info();
         let registry = node_viewer.registry.clone();
         let binding = registry.read();

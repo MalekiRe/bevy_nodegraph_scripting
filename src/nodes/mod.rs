@@ -37,6 +37,26 @@ pub mod ownership_node;
 pub mod primitive_node;
 pub mod start_node;
 
+// Everything has a flow node for in and out, they all at least have that
+// You must explicitly hook up your logic for what order variables exist in.
+// All calls are non-consuming
+// This means that anytime a function or anything takes something by 'value' it actually clones it implicitly.
+// Nodes cannot be hooked up incorrectly, flow inputs will not exist until data inputs do
+// Flow outputs will exist but that's fine.
+
+// Nodes we need
+// Start node just has an out flow
+// Apply node applies a value to a &mut value.
+// Destructure node does destructuring on structs, if it's a &mut struct then it's &mut destructuring
+// Destructure node also matches on enum variants, a flow out for each variant and a data out if it has data for them.
+// Destructure node also destructures tuples into their values
+// Command node gets commands
+// Query node gets an iterator of components
+// Iter node has break and normal flow input, and it has each and finished output, and on the each it has a data variant.
+// It is the case that the data variant on the each can only be connected to things that derive from the flow of the each.
+// Structure node creates structs or enums
+// If / Else node
+
 #[derive(Deref, DerefMut)]
 pub struct GraphNode(pub Box<dyn GraphNodeTrait>);
 
@@ -45,14 +65,7 @@ unsafe impl Sync for GraphNode {}
 
 impl GraphNode {
     pub fn list() -> Vec<GraphNode> {
-        vec![
-            GraphNode(Box::new(StartNode::default())),
-            GraphNode(Box::new(PrimitiveNode::default())),
-            GraphNode(Box::new(FunctionNode::default())),
-            GraphNode(Box::new(OwnershipNode::default())),
-            GraphNode(Box::new(ApplyNode::default())),
-            GraphNode(Box::new(BreakdownNode::default())),
-        ]
+        vec![GraphNode(Box::new(StartNode::default())), GraphNode(Box::new(PrimitiveNode::default())), GraphNode(Box::new(FunctionNode::default())), GraphNode(Box::new(OwnershipNode::default())), GraphNode(Box::new(ApplyNode::default())), GraphNode(Box::new(BreakdownNode::default()))]
     }
 }
 
@@ -72,68 +85,20 @@ impl dyn GraphNodeTrait {
 }
 
 pub trait GraphNodeMarketTrait {
-    fn show_input(
-        &self,
-        node_viewer: &mut NodeViewer,
-        pin: &InPin,
-        ui: &mut Ui,
-        snarl: &mut Snarl<GraphNode>,
-    ) -> PinInfo;
-    fn show_output(
-        &self,
-        node_viewer: &mut NodeViewer,
-        pin: &OutPin,
-        ui: &mut Ui,
-        snarl: &mut Snarl<GraphNode>,
-    ) -> PinInfo;
+    fn show_input(&self, node_viewer: &mut NodeViewer, pin: &InPin, ui: &mut Ui, snarl: &mut Snarl<GraphNode>) -> PinInfo;
+    fn show_output(&self, node_viewer: &mut NodeViewer, pin: &OutPin, ui: &mut Ui, snarl: &mut Snarl<GraphNode>) -> PinInfo;
 
-    fn show_node_menu(
-        &self,
-        node_viewer: &mut NodeViewer,
-        node: NodeId,
-        inputs: &[InPin],
-        outputs: &[OutPin],
-        ui: &mut Ui,
-        snarl: &mut Snarl<GraphNode>,
-    ) {
-    }
+    fn show_node_menu(&self, node_viewer: &mut NodeViewer, node: NodeId, inputs: &[InPin], outputs: &[OutPin], ui: &mut Ui, snarl: &mut Snarl<GraphNode>) {}
 
     fn title(&self, graph_node: &GraphNode, node_viewer: &mut NodeViewer) -> String;
     fn inputs(&self, graph_node: &GraphNode, node_viewer: &mut NodeViewer) -> usize;
     fn outputs(&self, graph_node: &GraphNode, node_viewer: &mut NodeViewer) -> usize;
 
-    fn show_body(
-        &self,
-        node_viewer: &mut NodeViewer,
-        node: NodeId,
-        inputs: &[InPin],
-        outputs: &[OutPin],
-        ui: &mut Ui,
-        snarl: &mut Snarl<GraphNode>,
-    ) {
-    }
+    fn show_body(&self, node_viewer: &mut NodeViewer, node: NodeId, inputs: &[InPin], outputs: &[OutPin], ui: &mut Ui, snarl: &mut Snarl<GraphNode>) {}
 
-    fn show_footer(
-        &self,
-        node_viewer: &mut NodeViewer,
-        node: NodeId,
-        inputs: &[InPin],
-        outputs: &[OutPin],
-        ui: &mut Ui,
-        snarl: &mut Snarl<GraphNode>,
-    ) {
-    }
+    fn show_footer(&self, node_viewer: &mut NodeViewer, node: NodeId, inputs: &[InPin], outputs: &[OutPin], ui: &mut Ui, snarl: &mut Snarl<GraphNode>) {}
 
-    fn show_header(
-        &self,
-        node_viewer: &mut NodeViewer,
-        node: NodeId,
-        inputs: &[InPin],
-        outputs: &[OutPin],
-        ui: &mut Ui,
-        snarl: &mut Snarl<GraphNode>,
-    ) {
-    }
+    fn show_header(&self, node_viewer: &mut NodeViewer, node: NodeId, inputs: &[InPin], outputs: &[OutPin], ui: &mut Ui, snarl: &mut Snarl<GraphNode>) {}
 
     fn has_body(&self, node_viewer: &mut NodeViewer, node: &GraphNode) -> bool {
         false
@@ -147,99 +112,37 @@ pub trait GraphNodeMarketTrait {
         false
     }
 
-    fn resolve_data_dependency(
-        &self,
-        snarl: &Snarl<GraphNode>,
-        bytecode: &mut Vec<Bytecode>,
-        scope_map: &mut HashMap<OutPinId, usize>,
-        stack_ptr: &mut usize,
-        pin: OutPin,
-    ) {
+    fn resolve_data_dependency(&self, snarl: &Snarl<GraphNode>, bytecode: &mut Vec<Bytecode>, scope_map: &mut HashMap<OutPinId, usize>, stack_ptr: &mut usize, pin: OutPin) {
         unimplemented!()
     }
-    fn resolve_forward_pass_flow_until_finished(
-        &self,
-        snarl: &Snarl<GraphNode>,
-        bytecode: &mut Vec<Bytecode>,
-        scope_map: &mut HashMap<OutPinId, usize>,
-        stack_ptr: &mut usize,
-        node_viewer: &mut NodeViewer,
-        world: &mut World,
-        pin: InPin,
-    ) -> Option<InPinId> {
+    fn resolve_forward_pass_flow_until_finished(&self, snarl: &Snarl<GraphNode>, bytecode: &mut Vec<Bytecode>, scope_map: &mut HashMap<OutPinId, usize>, stack_ptr: &mut usize, node_viewer: &mut NodeViewer, world: &mut World, pin: InPin) -> Option<InPinId> {
         unimplemented!()
     }
 
-    fn get_data_in(
-        &self,
-        in_pin: InPinId,
-        node_viewer: &mut NodeViewer,
-        snarl: &mut Snarl<GraphNode>,
-    ) -> Option<(Box<dyn PartialReflect>, Ownership)> {
+    fn get_data_in(&self, in_pin: InPinId, node_viewer: &mut NodeViewer, snarl: &mut Snarl<GraphNode>) -> Option<(Box<dyn PartialReflect>, Ownership)> {
         None
     }
-    fn get_data_out(
-        &self,
-        out_pin: OutPinId,
-        node_viewer: &mut NodeViewer,
-        snarl: &mut Snarl<GraphNode>,
-    ) -> Option<(Box<dyn PartialReflect>, Ownership)> {
+    fn get_data_out(&self, out_pin: OutPinId, node_viewer: &mut NodeViewer, snarl: &mut Snarl<GraphNode>) -> Option<(Box<dyn PartialReflect>, Ownership)> {
         None
     }
 }
 
 pub trait GraphCompileExt {
-    fn resolve_data_dependency(
-        &self,
-        bytecode: &mut Vec<Bytecode>,
-        scope_map: &mut HashMap<OutPinId, usize>,
-        stack_ptr: &mut usize,
-        pin: OutPinId,
-    ) -> usize;
-    fn resolve_forward_pass_flow_until_finished(
-        &self,
-        bytecode: &mut Vec<Bytecode>,
-        scope_map: &mut HashMap<OutPinId, usize>,
-        stack_ptr: &mut usize,
-        node_viewer: &mut NodeViewer,
-        world: &mut World,
-        pin: InPinId,
-    );
+    fn resolve_data_dependency(&self, bytecode: &mut Vec<Bytecode>, scope_map: &mut HashMap<OutPinId, usize>, stack_ptr: &mut usize, pin: OutPinId) -> usize;
+    fn resolve_forward_pass_flow_until_finished(&self, bytecode: &mut Vec<Bytecode>, scope_map: &mut HashMap<OutPinId, usize>, stack_ptr: &mut usize, node_viewer: &mut NodeViewer, world: &mut World, pin: InPinId);
 }
 impl GraphCompileExt for Snarl<GraphNode> {
-    fn resolve_data_dependency(
-        &self,
-        bytecode: &mut Vec<Bytecode>,
-        scope_map: &mut HashMap<OutPinId, usize>,
-        stack_ptr: &mut usize,
-        pin: OutPinId,
-    ) -> usize {
+    fn resolve_data_dependency(&self, bytecode: &mut Vec<Bytecode>, scope_map: &mut HashMap<OutPinId, usize>, stack_ptr: &mut usize, pin: OutPinId) -> usize {
         let marker = self.get_node(pin.node).unwrap().get_marker();
         marker.resolve_data_dependency(self, bytecode, scope_map, stack_ptr, self.out_pin(pin));
         *scope_map.get(&pin).unwrap()
     }
 
-    fn resolve_forward_pass_flow_until_finished(
-        &self,
-        bytecode: &mut Vec<Bytecode>,
-        scope_map: &mut HashMap<OutPinId, usize>,
-        stack_ptr: &mut usize,
-        node_viewer: &mut NodeViewer,
-        world: &mut World,
-        pin: InPinId,
-    ) {
+    fn resolve_forward_pass_flow_until_finished(&self, bytecode: &mut Vec<Bytecode>, scope_map: &mut HashMap<OutPinId, usize>, stack_ptr: &mut usize, node_viewer: &mut NodeViewer, world: &mut World, pin: InPinId) {
         let mut opt_pin = Some(pin);
         while let Some(pin) = opt_pin {
             let marker = self.get_node(pin.node).unwrap().get_marker();
-            opt_pin = marker.resolve_forward_pass_flow_until_finished(
-                self,
-                bytecode,
-                scope_map,
-                stack_ptr,
-                node_viewer,
-                world,
-                self.in_pin(pin),
-            );
+            opt_pin = marker.resolve_forward_pass_flow_until_finished(self, bytecode, scope_map, stack_ptr, node_viewer, world, self.in_pin(pin));
         }
     }
 }

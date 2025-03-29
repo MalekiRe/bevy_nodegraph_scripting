@@ -13,32 +13,18 @@ use egui_snarl::{InPinId, NodeId, OutPin, OutPinId, Snarl};
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 
-pub(crate) fn compile(
-    world: &mut World,
-    node_viewer: &mut NodeViewer,
-    snarl: &Snarl<GraphNode>,
-) -> Vec<Bytecode> {
+pub(crate) fn compile(world: &mut World, node_viewer: &mut NodeViewer, snarl: &Snarl<GraphNode>) -> Vec<Bytecode> {
     let mut scope_map: HashMap<OutPinId, usize> = HashMap::new();
     let mut bytecode: Vec<Bytecode> = vec![];
     let mut stack_ptr = 0;
     for (i, node) in snarl.nodes().enumerate() {
         if node.get::<StartNode>().is_some() {
-            let out_pin = snarl.out_pin(OutPinId {
-                node: NodeId(i),
-                output: 0,
-            });
+            let out_pin = snarl.out_pin(OutPinId { node: NodeId(i), output: 0 });
             let Some(in_pin) = out_pin.remotes.first() else {
                 continue;
             };
 
-            snarl.resolve_forward_pass_flow_until_finished(
-                &mut bytecode,
-                &mut scope_map,
-                &mut stack_ptr,
-                node_viewer,
-                world,
-                *in_pin,
-            );
+            snarl.resolve_forward_pass_flow_until_finished(&mut bytecode, &mut scope_map, &mut stack_ptr, node_viewer, world, *in_pin);
             return bytecode;
         }
     }
