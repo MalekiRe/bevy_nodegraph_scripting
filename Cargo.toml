@@ -1,0 +1,12 @@
+[package]
+name = "bevy_nodegraph_2"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy = { version = "0.16.0-rc.2",features = ["reflect_functions"] }
+bevy_prototype_lyon = { git = "https://github.com/Nilirad/bevy_prototype_lyon", branch = "v0.14-update" }
+bevy_egui = { git = "https://github.com/Friz64/bevy_egui", branch = "bevy-0.16" }
+bevy_framepace = { git = "https://github.com/aloucks/bevy_framepace", branch = "bevy-0.16" }
+evergreen_relations = { git = "https://github.com/MalekiRe/evergreen_relations"}
+random-number = "0.1.9"
